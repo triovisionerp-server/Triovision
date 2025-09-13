@@ -1,10 +1,8 @@
-import { LoginForm } from './LoginForm';
-import { AnimatedBackground } from './AnimatedBackground';
-import { FloatingShapes } from './FloatingShapes';
-import { LoginBranding } from './LoginBranding';
-import { MobileBranding } from './MobileBranding';
-import { Additional3DElements } from './Additional3DElements';
-import { MechanicalEngineer3D } from './MechanicalEngineer3D';
+import { AnimatedBackground } from "./AnimatedBackground";
+import { FloatingShapes } from "./FloatingShapes";
+import { Additional3DElements } from "./Additional3DElements";
+import { MechanicalEngineer3D } from "./MechanicalEngineer3D";
+import { LoginForm } from "./LoginForm";
 
 export function LoginPage() {
   return (
@@ -14,24 +12,22 @@ export function LoginPage() {
 
       <div className="relative z-10 w-full max-w-7xl mx-auto">
         <div className="grid lg:grid-cols-2 gap-12 items-center">
-          <LoginBranding />
+          {/* Left: 3D / image */}
+          <div className="hidden lg:flex justify-center">
+            <MechanicalEngineer3D />
+          </div>
 
-          {/* Keep only the single login card (LoginForm) - removed duplicate header/lock */}
+          {/* Right: Login form */}
           <div className="flex justify-center lg:justify-center xl:justify-end">
             <div className="w-full max-w-md">
               <LoginForm />
             </div>
           </div>
-
-          <div className="flex-shrink-0">
-            <MechanicalEngineer3D />
-          </div>
         </div>
-
-        <MobileBranding />
       </div>
 
       <Additional3DElements />
     </div>
   );
 }
+export default LoginPage;

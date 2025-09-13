@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "../lib/api";
 import { Card } from "./ui/card";
@@ -10,11 +10,10 @@ import { Lock, ArrowRight } from "lucide-react";
 export function RegisterForm() {
   const navigate = useNavigate();
 
-  // Trio ID default to "Trio"
   const [trioId, setTrioId] = useState("Trio");
   const [username, setUsername] = useState("");
   const [emailLocal, setEmailLocal] = useState("");
-  const [canonicalEmail, setCanonicalEmail] = useState(""); // exact email used for send/verify
+  const [canonicalEmail, setCanonicalEmail] = useState("");
   const [otpSent, setOtpSent] = useState(false);
   const [otp, setOtp] = useState("");
   const [otpVerified, setOtpVerified] = useState(false);
@@ -24,41 +23,34 @@ export function RegisterForm() {
   const [msg, setMsg] = useState("");
   const [err, setErr] = useState("");
 
-  // normalize but DO NOT blindly append domain here except when user explicitly types '@'
+  const DEFAULT_EMAIL_DOMAIN = "triovisioninternational.com";
   function normalizeEmailInput(raw: string) {
     if (!raw) return "";
-    let v = raw.trim();
-    v = v.replace(/\.+$/g, ""); // trim trailing dots
+    let v = raw.trim().replace(/\.+$/g, "");
     if (!v) return "";
     if (v.includes("@")) {
       if (v.endsWith("@triovisioninternational")) v = v + ".com";
       return v.toLowerCase();
     }
-    // return as-is (local part) — backend may append domain
-    return v.toLowerCase();
+    return `${v}@${DEFAULT_EMAIL_DOMAIN}`.toLowerCase();
   }
 
   const canSendOtp = !!emailLocal && !emailLocal.includes(" ");
 
-  // when user types in email input, auto-complete domain when they type '@'
   function handleEmailChange(raw: string) {
     let v = raw;
-    // if user just typed '@' at the end, auto-complete domain
     if (v.endsWith("@")) {
       v = v + "triovisioninternational.com";
     } else if (v.includes("@triovisioninternational") && !v.includes(".com")) {
-      // if user typed '@triovisioninternational' (without .com) append .com
       v = v.replace(/@triovisioninternational$/, "@triovisioninternational.com");
     }
     setEmailLocal(v);
 
-    // if username is empty, set it from the local part of the email
     if (!username) {
       const local = v.split("@")[0] || v;
       if (local) setUsername(local);
     }
 
-    // clear OTP-related state if input changed after sending OTP
     if (otpSent) {
       setOtpSent(false);
       setOtp("");
@@ -69,11 +61,12 @@ export function RegisterForm() {
     }
   }
 
-  async function handleSendOtp() {
+  // Send or Resend OTP
+  async function handleSendOtp(resend = false) {
     setMsg("");
     setErr("");
     if (!canSendOtp) {
-      setErr("Enter a valid email or local part.");
+      setErr("Enter a valid email.");
       return;
     }
 
@@ -83,15 +76,15 @@ export function RegisterForm() {
       return;
     }
 
-    // store exact email used for verify
     setCanonicalEmail(emailToUse);
 
     try {
       setOtpLoading(true);
-      console.debug("send-otp ->", { email: emailToUse, userName: username });
-      // include userName in the request as requested
-      const res = await api.post("/otp/send-otp", { email: emailToUse, userName: username });
-      console.debug("send-otp res:", res?.status, res?.data);
+      const url = resend
+        ? "https://errdashboard.onrender.com/api/otp/resend-otp"
+        : "https://errdashboard.onrender.com/api/otp/send-otp";
+
+      const res = await api.post(url, { email: emailToUse, userName: username });
       if (res?.data?.success || res?.status === 200) {
         setOtpSent(true);
         setMsg(res?.data?.message || "OTP sent to your email.");
@@ -99,9 +92,8 @@ export function RegisterForm() {
         setErr(res?.data?.message || "Failed to send OTP.");
       }
     } catch (e: any) {
-      console.error("Send OTP error:", e?.response || e);
       if (e?.response) setErr(e.response?.data?.message || "Send OTP failed (server).");
-      else if (e?.request) setErr("Send OTP failed: No response from server (CORS or network).");
+      else if (e?.request) setErr("Send OTP failed: No response from server.");
       else setErr(`Send OTP failed: ${e?.message || "unknown"}`);
     } finally {
       setOtpLoading(false);
@@ -122,9 +114,10 @@ export function RegisterForm() {
 
     try {
       setOtpLoading(true);
-      console.debug("verify-otp ->", canonicalEmail, otp);
-      const res = await api.post("/otp/verify-otp", { email: canonicalEmail, otp: otp.trim(), userName: username });
-      console.debug("verify-otp res:", res?.status, res?.data);
+      const res = await api.post(
+        "https://errdashboard.onrender.com/api/otp/verify-otp",
+        { email: canonicalEmail, otp: otp.trim(), userName: username }
+      );
       if (res?.data?.success || res?.status === 200) {
         setOtpVerified(true);
         setMsg(res?.data?.message || "Email verified.");
@@ -132,9 +125,8 @@ export function RegisterForm() {
         setErr(res?.data?.message || "Invalid OTP.");
       }
     } catch (e: any) {
-      console.error("Verify OTP error:", e?.response || e);
       if (e?.response) setErr(e.response?.data?.message || "Verify OTP failed (server).");
-      else if (e?.request) setErr("Verify OTP failed: No response from server (CORS or network).");
+      else if (e?.request) setErr("Verify OTP failed: No response from server.");
       else setErr(`Verify OTP failed: ${e?.message || "unknown"}`);
     } finally {
       setOtpLoading(false);
@@ -164,14 +156,16 @@ export function RegisterForm() {
     try {
       setLoading(true);
       const emailToSend = canonicalEmail || normalizeEmailInput(emailLocal);
-      console.debug("register ->", { userId: trioId, userName: username, email: emailToSend });
-      const res = await api.post("/auth/register", {
-        userId: trioId.trim(),
-        userName: username.trim(),
-        email: emailToSend,
-        password,
-      });
-      console.debug("register res:", res?.status, res?.data);
+      const res = await api.post(
+        "https://errdashboard.onrender.com/api/auth/register",
+        {
+          userId: trioId.trim(),
+          userName: username.trim(),
+          email: emailToSend,
+          password,
+          otp: otp.trim(), // include otp
+        }
+      );
       if (res?.data?.success || res?.status === 200) {
         setMsg(res?.data?.message || "Registration successful. Redirecting to login...");
         setTimeout(() => navigate("/login"), 900);
@@ -179,9 +173,8 @@ export function RegisterForm() {
         setErr(res?.data?.message || "Registration failed.");
       }
     } catch (e: any) {
-      console.error("Register error:", e?.response || e);
       if (e?.response) setErr(e.response?.data?.message || "Registration failed (server).");
-      else if (e?.request) setErr("Registration failed: No response from server (CORS or network).");
+      else if (e?.request) setErr("Registration failed: No response from server.");
       else setErr(`Registration failed: ${e?.message || "unknown"}`);
     } finally {
       setLoading(false);
@@ -217,9 +210,13 @@ export function RegisterForm() {
                   id="emailLocal"
                   value={emailLocal}
                   onChange={(e) => handleEmailChange(e.target.value)}
-                  placeholder="full email or local part"
+                  placeholder="@triovisioninternational.com"
                 />
-                <Button type="button" onClick={handleSendOtp} disabled={!canSendOtp || otpLoading}>
+                <Button
+                  type="button"
+                  onClick={() => handleSendOtp(otpSent)}
+                  disabled={!canSendOtp || otpLoading}
+                >
                   {otpLoading ? "Sending…" : otpSent ? "Resend OTP" : "Send OTP"}
                 </Button>
               </div>
